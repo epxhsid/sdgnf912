@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	ort.SetSharedLibraryPath("../../onnxruntime/lib/libonnxruntime.so")
+	ort.SetSharedLibraryPath("./onnxruntime/lib/libonnxruntime.so")
 
 	if err := ort.InitializeEnvironment(); err != nil {
 		log.Fatal(err)
@@ -18,8 +18,8 @@ func main() {
 	defer ort.DestroyEnvironment()
 
 	embedder, err := embedding.New(
-		"../../models/bge-small-en-v1.5/model.onnx",
-		"../../models/bge-small-en-v1.5/tokenizer.json",
+		"./models/bge-small-en-v1.5/model.onnx",
+		"./models/bge-small-en-v1.5/tokenizer.json",
 	)
 	if err != nil {
 		log.Fatal(err)
