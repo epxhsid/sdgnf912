@@ -1,0 +1,2 @@
+embedding/models/**/*.onnx filter=lfs diff=lfs merge=lfs -text
+embedding/onnxruntime/lib/*.so filter=lfs diff=lfs merge=lfs -text
