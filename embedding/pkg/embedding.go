@@ -1,13 +1,6 @@
-package main
+package embedding
 
-import (
-	"fmt"
-	"math"
-
-	"github.com/sugarme/tokenizer"
-	ort "github.com/yalue/onnxruntime_go"
-)
-
+/*
 func embed(tk *tokenizer.Tokenizer, session *ort.DynamicAdvancedSession, text string) ([]float32, error) {
 	encoding, err := tk.EncodeSingle(text, true)
 	if err != nil {
@@ -109,3 +102,4 @@ func embed(tk *tokenizer.Tokenizer, session *ort.DynamicAdvancedSession, text st
 
 	return embedding, nil
 }
+*/
