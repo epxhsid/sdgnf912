@@ -43,7 +43,15 @@ func New(modelPath, tokenizerPath string) (*Embedder, error) {
 	}, nil
 }
 
-func (e *Embedder) Embed(text string) ([]float32, error) {
+func (e *Embedder) Embed(text string, embedType EmbedType) ([]float32, error) {
+	switch embedType {
+	case Query:
+		text = queryInstruction + text
+	case Document:
+	default:
+		return nil, fmt.Errorf("unknown embedding type: %q", embedType)
+	}
+
 	encoding, err := e.tokenizer.EncodeSingle(text, true)
 	if err != nil {
 		return nil, fmt.Errorf("tokenize text: %w", err)
@@ -52,15 +60,37 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 	ids := encoding.GetIds()
 	attentionMask := encoding.GetAttentionMask()
 	typeIDs := encoding.GetTypeIds()
-
 	seqLen := len(ids)
 
 	if seqLen == 0 {
 		return nil, fmt.Errorf("tokenizer returned empty sequence")
 	}
 
-	// Convert tokenizer output to int64
-	// function assumes that ONNX model expects int64 tensors
+	if seqLen > MaxSequenceLength {
+		return nil, fmt.Errorf(
+			"text produces %d tokens, maximum is %d",
+			seqLen,
+			MaxSequenceLength,
+		)
+	}
+
+	if len(attentionMask) != seqLen {
+		return nil, fmt.Errorf(
+			"attention mask length mismatch: got %d, expected %d",
+			len(attentionMask),
+			seqLen,
+		)
+	}
+
+	if len(typeIDs) != seqLen {
+		return nil, fmt.Errorf(
+			"token type IDs length mismatch: got %d, expected %d",
+			len(typeIDs),
+			seqLen,
+		)
+	}
+
+	// ONNX model expects int64 tensors
 	inputIDs := make([]int64, seqLen)
 	mask := make([]int64, seqLen)
 	types := make([]int64, seqLen)
@@ -103,14 +133,17 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 
 	// last_hidden_state: [batch, sequence_length, hidden_size]
 	output, err := ort.NewEmptyTensor[float32](
-		ort.NewShape(1, int64(seqLen), EmbeddingDimensions),
+		ort.NewShape(
+			1,
+			int64(seqLen),
+			EmbeddingDimensions,
+		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create output tensor: %w", err)
 	}
 	defer output.Destroy()
 
-	// Run model
 	err = e.session.Run(
 		[]ort.Value{
 			inputTensor,
@@ -143,7 +176,7 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 	//
 	// [1, seqLen, 384]
 	//
-	// Since the batch size is 1, the first 384 values
+	// Since batch size is 1, the first 384 values
 	// correspond to the [CLS] token.
 	embedding := make([]float32, EmbeddingDimensions)
 	copy(embedding, outputData[:EmbeddingDimensions])
