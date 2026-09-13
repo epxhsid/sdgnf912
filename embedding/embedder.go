@@ -65,7 +65,7 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 	mask := make([]int64, seqLen)
 	types := make([]int64, seqLen)
 
-	for i := 0; i < seqLen; i++ {
+	for i := range seqLen {
 		inputIDs[i] = int64(ids[i])
 		mask[i] = int64(attentionMask[i])
 		types[i] = int64(typeIDs[i])
