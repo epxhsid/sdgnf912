@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ingestion.database.models import OutboxEventModel
 from ingestion.models.outbox import OutboxEvent
 
+RETRY_DELAY_SECONDS = 5
 
 class OutboxPersistence:
     def __init__(self, session: AsyncSession):
@@ -57,6 +58,6 @@ class OutboxPersistence:
             .values(
                 attempts=OutboxEventModel.attempts + 1,
                 last_error=error,
-                next_retry_at=now + timedelta(seconds=5),
+                next_retry_at=now + timedelta(seconds=RETRY_DELAY_SECONDS),
             )
         )
