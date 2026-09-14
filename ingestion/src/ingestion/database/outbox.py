@@ -1,4 +1,7 @@
-from sqlalchemy import select
+from datetime import UTC, datetime
+from uuid import UUID
+
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ingestion.database.models import OutboxEventModel
@@ -10,29 +13,38 @@ class OutboxPersistence:
         self.session = session
 
     async def create(self, event: OutboxEvent) -> None:
+        payload = {
+            **event.payload,
+            "event_id": str(event.id),
+        }
+
         model = OutboxEventModel(
             id=event.id,
             event_type=event.event_type,
             aggregate_id=event.aggregate_id,
-            payload=event.payload,
+            payload=payload,
         )
 
         self.session.add(model)
 
-    async def get_pending(self, limit: int = 100) -> list[OutboxEvent]:
+    async def get_pending(self, limit: int = 100) -> list[OutboxEventModel]:
         result = await self.session.execute(
             select(OutboxEventModel)
-            .where(OutboxEventModel.published_at.is_(None))
+            .where(
+                OutboxEventModel.published_at.is_(None),
+                OutboxEventModel.next_retry_at <= datetime.now(UTC),
+            )
             .order_by(OutboxEventModel.created_at)
             .limit(limit)
         )
 
-        return [
-            OutboxEvent(
-                id=model.id,
-                event_type=model.event_type,
-                aggregate_id=model.aggregate_id,
-                payload=model.payload,
+        return list(result.scalars())
+
+    async def mark_published(self, event_id: UUID) -> None:
+            await self.session.execute(
+                update(OutboxEventModel)
+                .where(OutboxEventModel.id == event_id)
+                .values(
+                    published_at=datetime.now(UTC),
+                )
             )
-            for model in result.scalars()
-        ]
