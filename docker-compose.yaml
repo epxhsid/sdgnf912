@@ -56,6 +56,18 @@ services:
       REDPANDA_ADMINAPI_ENABLED: "true"
       REDPANDA_ADMINAPI_URLS: http://redpanda:9644
 
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.96
+    restart: unless-stopped
+    command: server -s3
+    ports:
+      - "8333:8333"
+      - "8888:8888"
+      - "9333:9333"
+    volumes:
+      - seaweedfs_data:/data
+
 volumes:
   postgres_data:
   redpanda_data:
+  seaweedfs_data:
