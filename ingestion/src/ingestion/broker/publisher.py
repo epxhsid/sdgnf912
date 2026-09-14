@@ -57,7 +57,7 @@ class OutboxPublisher:
         published = 0
 
         for event in events:
-            success = await self._publish_event(event)
+            success = self._publish_event(event)
 
             if success:
                 async with self.session_factory() as session:
@@ -71,34 +71,15 @@ class OutboxPublisher:
 
         return published
 
-    async def _publish_event(self, event) -> bool:
-        loop = asyncio.get_running_loop()
-
-        delivery_future = loop.create_future()
+    def _publish_event(self, event) -> bool:
+        delivery_error = None
 
         def on_delivery(error, message):
+            nonlocal delivery_error
+
             if error is not None:
-                if not delivery_future.done():
-                    delivery_future.set_exception(error)
-
+                delivery_error = error
                 return
-
-            if not delivery_future.done():
-                delivery_future.set_result(message)
-
-        try:
-            self.producer.produce(
-                topic=event.event_type,
-                key=str(event.aggregate_id),
-                value=event.payload,
-                on_delivery=on_delivery,
-            )
-
-            while not delivery_future.done():
-                self.producer.poll(0.1)
-                await asyncio.sleep(0.01)
-
-            message = delivery_future.result()
 
             logger.info(
                 "Published event %s to %s [%s] @ %s",
@@ -108,17 +89,30 @@ class OutboxPublisher:
                 message.offset(),
             )
 
+        try:
+            self.producer.produce(
+                topic=event.event_type,
+                key=str(event.aggregate_id),
+                value=event.payload,
+                on_delivery=on_delivery,
+            )
+
+            remaining = self.producer.flush()
+
+            if delivery_error is not None:
+                raise delivery_error
+
+            if remaining:
+                raise RuntimeError(
+                    f"{remaining} Kafka messages remain undelivered"
+                )
+
             return True
 
-        except Exception as exc:
-            logger.exception("Failed to publish event %s", event.id)
-
-            async with self.session_factory() as session:
-                outbox = OutboxPersistence(session)
-                await outbox.mark_failed(
-                    event.id,
-                    str(exc),
-                )
-                await session.commit()
+        except Exception:
+            logger.exception(
+                "Failed to publish event %s",
+                event.id,
+            )
 
             return False

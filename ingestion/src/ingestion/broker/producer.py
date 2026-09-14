@@ -11,6 +11,7 @@ class KafkaProducer:
         self.producer = Producer(
             {
                 "bootstrap.servers": bootstrap_servers,
+                "message.timeout.ms": 5000,
             }
         )
 
