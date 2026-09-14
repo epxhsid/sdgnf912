@@ -13,3 +13,5 @@ go.work.sum
 .env
 example/
 embedding/onnxruntime/
+__pycache__/
+*.py[cod]
