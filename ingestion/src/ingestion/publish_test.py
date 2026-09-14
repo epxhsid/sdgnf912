@@ -11,6 +11,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
+
 async def main() -> None:
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
@@ -21,7 +22,11 @@ async def main() -> None:
         producer=producer,
     )
 
-    await publisher.run()
+    try:
+        await publisher.run()
+    finally:
+        await producer.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

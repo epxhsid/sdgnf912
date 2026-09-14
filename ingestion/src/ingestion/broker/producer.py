@@ -1,30 +1,32 @@
 import json
-from collections.abc import Callable
 from typing import Any
 
-from confluent_kafka import Producer
+from confluent_kafka.aio import AIOProducer
 
-DeliveryCallback = Callable[[Any, Any], None]
 
 class KafkaProducer:
     def __init__(self, bootstrap_servers: str):
-        self.producer = Producer(
+        self.producer = AIOProducer(
             {
                 "bootstrap.servers": bootstrap_servers,
                 "message.timeout.ms": 5000,
             }
         )
 
-    def produce(self, topic: str, value: dict[str, Any], key: str | None = None, on_delivery: DeliveryCallback | None = None) -> None:
-        self.producer.produce(
+    async def produce(
+        self,
+        topic: str,
+        value: dict[str, Any],
+        key: str | None = None,
+    ):
+        return await self.producer.produce(
             topic=topic,
             key=key,
             value=json.dumps(value).encode("utf-8"),
-            callback=on_delivery,
         )
 
-    def poll(self, timeout: float = 0.0) -> None:
-        self.producer.poll(timeout)
+    async def flush(self) -> None:
+        await self.producer.flush()
 
-    def flush(self, timeout: float = 10.0) -> int:
-        return self.producer.flush(timeout)
+    async def close(self) -> None:
+        await self.producer.close()

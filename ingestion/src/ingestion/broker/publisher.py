@@ -8,7 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 class OutboxPublisher:
-    def __init__(self, session_factory, producer: KafkaProducer, poll_interval: float = 1.0, batch_size: int = 100):
+    def __init__(
+        self,
+        session_factory,
+        producer: KafkaProducer,
+        poll_interval: float = 1.0,
+        batch_size: int = 100,
+    ):
         self.session_factory = session_factory
         self.producer = producer
         self.poll_interval = poll_interval
@@ -29,15 +35,7 @@ class OutboxPublisher:
 
         finally:
             logger.info("Flushing Kafka producer")
-
-            remaining = self.producer.flush()
-
-            if remaining:
-                logger.warning(
-                    "%d messages were not delivered",
-                    remaining,
-                )
-
+            await self.producer.flush()
             logger.info("Outbox publisher stopped")
 
     def stop(self) -> None:
@@ -57,7 +55,7 @@ class OutboxPublisher:
         published = 0
 
         for event in events:
-            success = self._publish_event(event)
+            success = await self._publish_event(event)
 
             if success:
                 async with self.session_factory() as session:
@@ -71,15 +69,15 @@ class OutboxPublisher:
 
         return published
 
-    def _publish_event(self, event) -> bool:
-        delivery_error = None
+    async def _publish_event(self, event) -> bool:
+        try:
+            delivery_future = await self.producer.produce(
+                topic=event.event_type,
+                key=str(event.aggregate_id),
+                value=event.payload,
+            )
 
-        def on_delivery(error, message):
-            nonlocal delivery_error
-
-            if error is not None:
-                delivery_error = error
-                return
+            message = await delivery_future
 
             logger.info(
                 "Published event %s to %s [%s] @ %s",
@@ -89,30 +87,22 @@ class OutboxPublisher:
                 message.offset(),
             )
 
-        try:
-            self.producer.produce(
-                topic=event.event_type,
-                key=str(event.aggregate_id),
-                value=event.payload,
-                on_delivery=on_delivery,
-            )
-
-            remaining = self.producer.flush()
-
-            if delivery_error is not None:
-                raise delivery_error
-
-            if remaining:
-                raise RuntimeError(
-                    f"{remaining} Kafka messages remain undelivered"
-                )
-
             return True
 
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Failed to publish event %s",
                 event.id,
             )
+
+            async with self.session_factory() as session:
+                outbox = OutboxPersistence(session)
+
+                await outbox.mark_failed(
+                    event.id,
+                    str(exc),
+                )
+
+                await session.commit()
 
             return False
