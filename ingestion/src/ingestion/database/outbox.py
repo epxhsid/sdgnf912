@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -41,10 +41,22 @@ class OutboxPersistence:
         return list(result.scalars())
 
     async def mark_published(self, event_id: UUID) -> None:
-            await self.session.execute(
-                update(OutboxEventModel)
-                .where(OutboxEventModel.id == event_id)
-                .values(
-                    published_at=datetime.now(UTC),
-                )
+        await self.session.execute(
+            update(OutboxEventModel)
+            .where(OutboxEventModel.id == event_id)
+            .values(
+                published_at=datetime.now(UTC),
             )
+        )
+
+    async def mark_failed(self, event_id: UUID, error: str) -> None:
+        now = datetime.now(UTC)
+        await self.session.execute(
+            update(OutboxEventModel)
+            .where(OutboxEventModel.id == event_id)
+            .values(
+                attempts=OutboxEventModel.attempts + 1,
+                last_error=error,
+                next_retry_at=now + timedelta(seconds=5),
+            )
+        )

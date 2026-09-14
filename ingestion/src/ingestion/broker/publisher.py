@@ -110,6 +110,15 @@ class OutboxPublisher:
 
             return True
 
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to publish event %s", event.id)
+
+            async with self.session_factory() as session:
+                outbox = OutboxPersistence(session)
+                await outbox.mark_failed(
+                    event.id,
+                    str(exc),
+                )
+                await session.commit()
+
             return False
