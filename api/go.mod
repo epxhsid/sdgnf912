@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	github.com/andybalholm/brotli v1.2.4 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.47.0 // indirect
 	github.com/gofiber/fiber/v3 v3.5.0 // indirect
 	github.com/gofiber/schema v1.8.6 // indirect
 	github.com/gofiber/utils/v2 v2.5.2 // indirect
